@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="AirAware – Real-time Air Quality Index for any city worldwide" />
+  <title>AirAware – Real-Time Air Quality</title>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <!-- Chart.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- Ambient background orbs -->
+  <div class="orb orb-1" id="orbMain"></div>
+  <div class="orb orb-2"></div>
+
+  <!-- ═══════════════════════════ HEADER ═══════════════════════════ -->
+  <header class="site-header">
+    <div class="header-inner">
+      <div class="logo">
+        <div class="logo-mark">A</div>
+        <div class="logo-text">
+          <span class="logo-name">AirAware</span>
+          <span class="logo-sub">Real-time Air Quality</span>
+        </div>
+      </div>
+      <div class="live-badge">
+        <span class="live-dot"></span>
+        <span>Live Data</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ═══════════════════════════ MAIN ═══════════════════════════ -->
+  <main class="main-content">
+
+    <!-- Search section -->
+    <section class="search-section fade-in">
+      <h1 class="hero-title">Check Air Quality</h1>
+      <p class="hero-sub">Real-time AQI for any city worldwide — powered by OpenWeather API</p>
+
+      <form class="search-form" id="searchForm">
+        <div class="search-input-wrap">
+          <svg class="search-icon" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+          </svg>
+          <input
+            type="text"
+            id="cityInput"
+            class="search-input"
+            placeholder="Enter city — Mumbai, Paris, New York..."
+            autocomplete="off"
+          />
+        </div>
+        <button type="submit" class="btn-search" id="searchBtn">
+          <span class="btn-label">Check AQI</span>
+          <span class="btn-spinner hidden" id="spinner"></span>
+        </button>
+      </form>
+
+      <!-- Favorites -->
+      <div class="favorites-row" id="favoritesRow"></div>
+    </section>
+
+    <!-- Error message -->
+    <div class="error-box hidden" id="errorBox">
+      <span class="error-icon">⚠️</span>
+      <div>
+        <p class="error-title">Not Found</p>
+        <p class="error-msg" id="errorMsg"></p>
+      </div>
+    </div>
+
+    <!-- Skeleton loader -->
+    <div class="skeleton-wrap hidden" id="skeletonWrap">
+      <div class="skeleton-bar" style="height:80px;border-radius:16px;"></div>
+      <div class="skeleton-grid">
+        <div class="skeleton-bar" style="height:300px;border-radius:16px;"></div>
+        <div class="skeleton-bar" style="height:300px;border-radius:16px;"></div>
+      </div>
+      <div class="skeleton-bar" style="height:260px;border-radius:16px;"></div>
+    </div>
+
+    <!-- ═══ DASHBOARD (hidden until data loads) ═══ -->
+    <div class="dashboard hidden" id="dashboard">
+
+      <!-- City header bar -->
+      <div class="city-bar slide-up" id="cityBar">
+        <div class="city-info">
+          <h2 class="city-name" id="cityName">—</h2>
+          <p class="city-meta" id="cityMeta">—</p>
+        </div>
+        <button class="btn-fav" id="favBtn" title="Save city">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24" id="favIcon">
+            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+          </svg>
+          <span id="favLabel">Save City</span>
+        </button>
+      </div>
+
+      <!-- Main grid -->
+      <div class="dash-grid">
+
+        <!-- Left column: Gauge + Legend -->
+        <div class="dash-left">
+
+          <!-- AQI Gauge Card -->
+          <div class="card gauge-card slide-up stagger-1">
+            <canvas id="gaugeCanvas" width="260" height="170"></canvas>
+            <div class="gauge-center" id="gaugeCenter">
+              <span class="gauge-aqi" id="gaugeAqi">—</span>
+              <span class="gauge-label">AQI</span>
+              <span class="gauge-cat" id="gaugeCat">—</span>
+            </div>
+            <p class="gauge-advice" id="gaugeAdvice"></p>
+          </div>
+
+          <!-- AQI Legend -->
+          <div class="card legend-card slide-up stagger-2">
+            <p class="card-label">AQI Scale</p>
+            <div class="legend-list" id="legendList"></div>
+          </div>
+        </div>
+
+        <!-- Right column: Pollutants + Health -->
+        <div class="dash-right">
+
+          <!-- Pollutants -->
+          <div class="card pollutants-card slide-up stagger-3">
+            <p class="card-label">Pollutant Breakdown</p>
+            <div class="pollutants-grid" id="pollutantsGrid"></div>
+          </div>
+
+          <!-- Health Advice -->
+          <div class="card health-card slide-up stagger-4" id="healthCard">
+            <div class="health-header">
+              <span class="health-icon" id="healthIcon">🌿</span>
+              <div>
+                <p class="health-title" id="healthTitle">—</p>
+                <p class="health-sub">Health recommendations</p>
+              </div>
+            </div>
+            <ul class="health-tips" id="healthTips"></ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- Chart -->
+      <div class="card chart-card slide-up stagger-5">
+        <div class="chart-header">
+          <h3 class="chart-title">24-Hour Trend</h3>
+          <div class="chart-tabs" id="chartTabs">
+            <button class="tab-btn active" data-metric="aqi" style="--tab-color:#38bdf8">AQI</button>
+            <button class="tab-btn" data-metric="pm25" style="--tab-color:#f97316">PM2.5</button>
+            <button class="tab-btn" data-metric="no2" style="--tab-color:#eab308">NO₂</button>
+            <button class="tab-btn" data-metric="o3" style="--tab-color:#22c55e">O₃</button>
+          </div>
+        </div>
+        <div class="chart-wrap">
+          <canvas id="trendChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Empty state -->
+    <div class="empty-state fade-in" id="emptyState">
+      <div class="empty-globe">🌍</div>
+      <h3 class="empty-title">Search a city to begin</h3>
+      <p class="empty-sub">Enter any city to get real-time AQI, pollutant levels, and health recommendations.</p>
+      <div class="quick-cities" id="quickCities"></div>
+    </div>
+
+  </main>
+
+  <!-- ═══════════════════════════ FOOTER ═══════════════════════════ -->
+  <footer class="site-footer">
+    <span>© 2025 AirAware · Powered by OpenWeather API</span>
+    <span>Vanilla HTML · CSS · JS</span>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
