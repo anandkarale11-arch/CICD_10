@@ -6,10 +6,7 @@
 "use strict";
 
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
-// Replace with your OpenWeather API key.
-// Get a free key at: https://openweathermap.org/api
-const API_KEY = "YOUR_OPENWEATHER_API_KEY";
-const OW_BASE = "https://api.openweathermap.org";
+
 
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
 const AQI_LEVELS = [
@@ -245,72 +242,70 @@ async function searchCity(city) {
   hideError();
 
   try {
-    // 1. Geocode
+    // 1. Geocoding (Open-Meteo)
     const geoRes = await fetch(
-      `${OW_BASE}/geo/1.0/direct?q=${encodeURIComponent(city)}&limit=1&appid=${API_KEY}`
+      `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1`
     );
-    if (!geoRes.ok) throw new Error("Geocoding request failed.");
     const geoData = await geoRes.json();
 
-    if (!geoData.length) {
-      throw new Error(`City "${city}" not found. Please check the spelling and try again.`);
+    if (!geoData.results || !geoData.results.length) {
+      throw new Error(`City "${city}" not found`);
     }
 
-    const { lat, lon, name, country, state: stateName } = geoData[0];
+    const { latitude, longitude, name, country } = geoData.results[0];
 
-    // 2. Current AQ
+    // 2. Air Quality Data
     const aqRes = await fetch(
-      `${OW_BASE}/data/2.5/air_pollution?lat=${lat}&lon=${lon}&appid=${API_KEY}`
+      `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${latitude}&longitude=${longitude}&hourly=pm2_5,pm10,nitrogen_dioxide,ozone,carbon_monoxide`
     );
-    if (!aqRes.ok) throw new Error("Air quality request failed.");
     const aqData = await aqRes.json();
-    const current = aqData.list[0];
 
-    // 3. History (last 24h)
-    const now = Math.floor(Date.now() / 1000);
-    const yesterday = now - 24 * 3600;
-    const histRes = await fetch(
-      `${OW_BASE}/data/2.5/air_pollution/history?lat=${lat}&lon=${lon}&start=${yesterday}&end=${now}&appid=${API_KEY}`
-    );
-    const histData = await histRes.json();
+    const latestIndex = aqData.hourly.time.length - 1;
 
-    const history = (histData.list || []).map((entry) => {
-      const p = entry.components.pm2_5;
+    const pm25 = aqData.hourly.pm2_5[latestIndex];
+
+    const { aqi, level } = calcAQI(pm25);
+    const lvlData = AQI_LEVELS[level];
+
+    // Build history (last 24 points)
+    const history = aqData.hourly.time.slice(-24).map((t, i) => {
+      const idx = aqData.hourly.time.length - 24 + i;
+      const p = aqData.hourly.pm2_5[idx];
+
       const { aqi } = calcAQI(p);
+
       return {
-        time:  new Date(entry.dt * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        time: new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         aqi,
-        pm25:  p,
-        pm10:  entry.components.pm10,
-        no2:   entry.components.no2,
-        o3:    entry.components.o3,
-        co:    entry.components.co,
+        pm25: p,
+        pm10: aqData.hourly.pm10[idx],
+        no2: aqData.hourly.nitrogen_dioxide[idx],
+        o3: aqData.hourly.ozone[idx],
+        co: aqData.hourly.carbon_monoxide[idx],
       };
     });
 
-    const c = current.components;
-    const { aqi, level } = calcAQI(c.pm2_5);
-    const lvlData = AQI_LEVELS[level];
-
-    state.currentCity = { name, country, state: stateName || "" };
+    state.currentCity = { name, country };
     state.currentData = {
-      aqi, level, color: lvlData.color, category: lvlData.label,
+      aqi,
+      level,
+      color: lvlData.color,
+      category: lvlData.label,
       pollutants: {
-        pm2_5: c.pm2_5, pm10: c.pm10, no2: c.no2,
-        o3: c.o3, co: c.co, so2: c.so2,
+        pm2_5: pm25,
+        pm10: aqData.hourly.pm10[latestIndex],
+        no2: aqData.hourly.nitrogen_dioxide[latestIndex],
+        o3: aqData.hourly.ozone[latestIndex],
+        co: aqData.hourly.carbon_monoxide[latestIndex],
       },
       history,
-      timestamp: new Date(current.dt * 1000),
+      timestamp: new Date(),
     };
 
     renderDashboard();
 
   } catch (err) {
-    let msg = err.message;
-    if (msg.includes("401") || msg.includes("Invalid")) {
-      msg = "Invalid API key. Please update API_KEY in app.js.";
-    }
-    showError(msg);
+    showError(err.message);
     showEmpty();
   } finally {
     setLoading(false);
