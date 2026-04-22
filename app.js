@@ -260,9 +260,21 @@ async function searchCity(city) {
     );
     const aqData = await aqRes.json();
 
-    const latestIndex = aqData.hourly.time.length - 1;
+    // Find last valid PM2.5 value
+let pm25 = null;
+let latestIndex = -1;
 
-    const pm25 = aqData.hourly.pm2_5[latestIndex];
+for (let i = aqData.hourly.pm2_5.length - 1; i >= 0; i--) {
+  if (aqData.hourly.pm2_5[i] !== null && aqData.hourly.pm2_5[i] !== undefined) {
+    pm25 = aqData.hourly.pm2_5[i];
+    latestIndex = i;
+    break;
+  }
+}
+
+if (pm25 === null) {
+  throw new Error("No AQI data available for this city");
+}
 
     const { aqi, level } = calcAQI(pm25);
     const lvlData = AQI_LEVELS[level];
@@ -270,7 +282,10 @@ async function searchCity(city) {
     // Build history (last 24 points)
     const history = aqData.hourly.time.slice(-24).map((t, i) => {
       const idx = aqData.hourly.time.length - 24 + i;
-      const p = aqData.hourly.pm2_5[idx];
+      const p = aqData.hourly.pm2_5[idx] ?? 0;
+
+      console.log("PM2.5 Data:", aqData.hourly.pm2_5);
+      console.log("Selected PM2.5:", pm25);
 
       const { aqi } = calcAQI(p);
 
